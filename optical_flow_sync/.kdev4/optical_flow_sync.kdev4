@@ -1,0 +1,33 @@
+[Buildset]
+BuildItems=@Variant(\x00\x00\x00\t\x00\x00\x00\x00\x01\x00\x00\x00\x0b\x00\x00\x00\x00\x01\x00\x00\x00"\x00o\x00p\x00t\x00i\x00c\x00a\x00l\x00_\x00f\x00l\x00o\x00w\x00_\x00s\x00y\x00n\x00c)
+
+[CMake]
+BuildDirs=/home/aortega/proyectos/Dynamic_segmentation/code/ROS/optical_flow_sync/build
+CMakeDir=/usr/share/cmake-2.8/Modules
+Current CMake Binary=file:///usr/bin/cmake
+CurrentBuildDir=file:///home/aortega/proyectos/Dynamic_segmentation/code/ROS/optical_flow_sync/build
+CurrentBuildType=Debug
+CurrentInstallDir=
+Extra Arguments=
+ProjectRootRelative=./
+
+[Launch]
+Launch Configurations=Launch Configuration 0
+
+[Launch][Launch Configuration 0]
+Configured Launch Modes=execute
+Configured Launchers=nativeAppLauncher
+Name=New Native Application Configuration
+Type=Native Application
+
+[Launch][Launch Configuration 0][Data]
+Arguments=--file /home/aortega/Experiments/calibration_iri_velodyne/exp2/laser_calib_left.yaml clouds:=/teo/velodyne_points images:=/teo/sensors/stereo/left/image_raw\n
+Dependencies=@Variant(\x00\x00\x00\t\x00\x00\x00\x00\x00)
+Dependency Action=Nothing
+EnvironmentGroup=default
+Executable=file:///home/aortega/proyectos/Dynamic_segmentation/code/ROS/optical_flow_sync/bin/optical_flow_sync
+External Terminal=konsole --noclose --workdir %workdir -e %exe
+Project Target=
+Use External Terminal=false
+Working Directory=
+isExecutable=true

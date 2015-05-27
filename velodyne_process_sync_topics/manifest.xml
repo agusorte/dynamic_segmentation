@@ -1,0 +1,21 @@
+<package>
+  <description brief="velodyne_process_sync_topics">
+
+     velodyne_process_sync_topics
+
+  </description>
+  <author>Agustin Ortega</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/velodyne_process_sync_topics</url>
+  <depend package="pcl_ros"/>
+  <depend package="opencv2"/>
+  <depend package="roscpp"/>
+  <depend package="sensor_msgs"/>
+  <depend package="cv_bridge"/>
+  <depend package="image_transport"/>
+  <depend package="rosboost_cfg"/>
+
+</package>
+
+

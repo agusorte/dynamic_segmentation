@@ -1,0 +1,23 @@
+<package>
+  <description brief="optical_flow_range_non_sync">
+
+     optical_flow_range_non_sync
+
+  </description>
+  <author>Agustin Ortega</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/optical_flow_range_non_sync</url>
+  <depend package="pcl"/>
+  <depend package="pcl_ros"/>
+  <depend package="roscpp"/>
+  <depend package="opencv2"/>
+  <depend package="cv_bridge"/>
+  <depend package="image_transport"/>
+  <depend package="std_msgs"/>
+  <depend package="rosboost_cfg"/>
+  <depend package="sensor_msgs"/>
+
+</package>
+
+

@@ -1,0 +1,262 @@
+ #include <string>
+ #include <iostream>
+ #include <rosbag/bag.h>
+ #include <rosbag/view.h>
+ #include "ros/ros.h"
+ #include <ros/names.h>
+ 
+ #include <boost/foreach.hpp>
+ #include <boost/assign/list_of.hpp>
+ 
+ #include <sensor_msgs/Image.h>
+ #include <sensor_msgs/CameraInfo.h>
+ #include <sensor_msgs/PointCloud2.h>
+ 
+ #include <opencv/cv.h>
+ #include <opencv/highgui.h>
+ #include <cv_bridge/cv_bridge.h>
+ #include <sensor_msgs/image_encodings.h>
+ 
+ #include <message_filters/sync_policies/exact_time.h>
+ 
+ #include <message_filters/sync_policies/approximate_time.h>
+ 
+ #include <message_filters/subscriber.h>
+ #include <message_filters/sync_policies/exact_time.h>
+ #include <message_filters/time_synchronizer.h> 
+ 
+ #include <pcl/ModelCoefficients.h>
+ #include <pcl/point_types.h>
+ #include <pcl/filters/extract_indices.h>
+ #include <pcl/filters/voxel_grid.h>
+ #include <pcl/features/normal_3d.h>
+ #include <pcl/kdtree/kdtree.h>
+ #include <pcl/sample_consensus/method_types.h>
+ #include <pcl/sample_consensus/model_types.h>
+ #include <pcl/segmentation/sac_segmentation.h>
+ #include <pcl/segmentation/extract_clusters.h>
+ 
+ 
+ #include <pcl/point_types.h>
+ 
+ 
+ //visualization 
+ #include <pcl/visualization/cloud_viewer.h>
+ #include <pcl/visualization/pcl_visualizer.h>
+ #include <pcl/visualization/range_image_visualizer.h>
+ 
+ //segmentation
+ #include <pcl/sample_consensus/method_types.h>
+ #include <pcl/sample_consensus/model_types.h>
+ #include <pcl/segmentation/sac_segmentation.h>
+ #include <pcl/segmentation/extract_clusters.h>
+ #include <pcl/kdtree/kdtree.h>  
+ 
+ #include "pcl/io/io.h"
+ #include "pcl/io/pcd_io.h"
+ #include "pcl/filters/voxel_grid.h"
+ #include "pcl/filters/passthrough.h"
+ #include "pcl/filters/extract_indices.h"
+ #include "pcl/features/normal_3d.h"
+ 
+ #include <pcl/features/normal_3d.h>
+ #include <pcl/kdtree/kdtree.h>
+ #include "pcl/kdtree/io.h"
+ #include <pcl/sample_consensus/method_types.h>
+ #include <pcl/sample_consensus/model_types.h>
+ #include <pcl/segmentation/sac_segmentation.h>
+ #include <pcl/segmentation/extract_clusters.h>
+ 
+ #include <pcl/console/parse.h>
+ // #include <terminal_tools/print.h>
+ // #include <terminal_tools/parse.h>
+ 
+ #include <pcl/filters/statistical_outlier_removal.h>
+ #include <pcl/filters/extract_indices.h>
+ #include <pcl/filters/project_inliers.h>
+ 
+ 
+ #include "cxcore.h"
+ #include <cv.h>
+ #include <highgui.h>
+ #include <math.h>
+ #include <vector>
+ #include <ros/ros.h>
+ #include "sensor_msgs/Image.h"
+ #include "image_transport/image_transport.h"
+ #include "cv_bridge/CvBridge.h"
+ #include <opencv/cv.h>
+ #include <opencv/highgui.h>
+ 
+ #include <pcl/console/parse.h>
+ 
+ 
+ 
+ using namespace pcl;
+ using namespace std;
+ using namespace Eigen;
+ using namespace message_filters;
+ 
+ using namespace cv;
+ namespace enc = sensor_msgs::image_encodings;
+ 
+ typedef message_filters::Subscriber< sensor_msgs::Image > ImageSubscriber;
+ 
+ typedef message_filters::Subscriber<sensor_msgs::PointCloud2 > CloudSubscriber;
+ 
+ 
+ void Callback(const sensor_msgs::PointCloud2ConstPtr& cloudI,
+	       const sensor_msgs::ImageConstPtr& msg)
+ {
+   
+   
+   /////////////////////////////////////////////////////////////////////
+   /// point cloud 
+   ///////////////////////////////////////////////////////////////////
+   PointCloud<PointXYZ>::Ptr cloud_ptr (new PointCloud<PointXYZ>);
+   
+   
+   if ((cloudI->width * cloudI->height) == 0)
+     return ;
+   
+   ROS_INFO ("Received %d data points in frame %s with the following fields: %s",
+   
+   (int)cloudI->width * cloudI->height,
+   
+   cloudI->header.frame_id.c_str (),
+   
+   pcl::getFieldsList (*cloudI).c_str ());
+   
+   
+   
+   
+   pcl::fromROSMsg(*cloudI, *cloud_ptr);
+   
+   ////////////////////////////////////////////////////////////////
+   ///image
+   ////////////////////////////////////////////////////////////////
+   cv_bridge::CvImageConstPtr cv_ptr;
+   
+   try
+   
+   {
+     
+     if (enc::isColor(msg->encoding))
+       
+       cv_ptr = cv_bridge::toCvShare(msg, enc::BGR8);
+     
+     else
+       
+       cv_ptr = cv_bridge::toCvShare(msg, enc::MONO8);
+     
+     ROS_INFO("Image data size (%d, %d)",cv_ptr->image.rows, cv_ptr->image.cols);
+     
+   }
+   
+   catch (cv_bridge::Exception& e)
+   
+   {
+     
+     ROS_ERROR("cv_bridge exception: %s", e.what());
+     
+     
+     return ;
+     
+   }
+   
+   
+   
+ }
+ 
+ 
+ void Callback_imgs(const sensor_msgs::ImageConstPtr& image1,
+		    const sensor_msgs::ImageConstPtr& image2,const sensor_msgs::PointCloud2ConstPtr& cloudI)
+ {
+   
+   cv_bridge::CvImageConstPtr cv_ptr1,cv_ptr2;
+   ROS_INFO("image1 timestamps %i.%i ", image1->header.stamp.sec,image1->header.stamp.nsec);
+   ROS_INFO("image2 timestamps %i.%i ", image2->header.stamp.sec,image2->header.stamp.nsec);
+    ROS_INFO("cloud timestamps %i.%i ", cloudI->header.stamp.sec,cloudI->header.stamp.nsec);
+//    ROS_INFO ("Received %d data points in frame %s with the following fields: %s", (int)cloudI->width * cloudI->height,
+//                 cloudI->header.frame_id.c_str (),
+//                 pcl::getFieldsList (*cloudI).c_str ());
+   
+   try
+   
+   {
+     
+     if (enc::isColor(image1->encoding) && enc::isColor(image2->encoding)){
+       
+       cv_ptr1 = cv_bridge::toCvShare(image1, enc::BGR8);
+       cv_ptr2 = cv_bridge::toCvShare(image2, enc::BGR8);
+     } 
+     else
+     {  
+       cv_ptr1 = cv_bridge::toCvShare(image1, enc::MONO8);
+       cv_ptr2 = cv_bridge::toCvShare(image2, enc::MONO8);
+       
+       ROS_INFO("Image1 data size (%d, %d)",cv_ptr1->image.rows, cv_ptr1->image.cols);
+       ROS_INFO("Image2 data size (%d, %d)",cv_ptr1->image.rows, cv_ptr2->image.cols);
+     } 
+   }
+   
+   catch (cv_bridge::Exception& e)
+   
+   {
+     
+     ROS_ERROR("cv_bridge exception: %s", e.what());
+     
+     
+     return ;
+     
+   }
+   
+   Mat im_1=cv_ptr1->image.clone();
+    Mat im_2=cv_ptr2->image.clone();
+  
+ 
+  imshow( "Image1",  im_1);  
+  imshow( "Image2",  im_2);  
+    waitKey(30);
+  
+ }
+ int main (int argc, char** argv){
+   
+   
+   typedef sync_policies::ExactTime<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::PointCloud2> MySyncPolicy;
+    typedef sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image,sensor_msgs::PointCloud2> MySyncPolicy_Aprox;
+   
+   ros::init(argc, argv, "vision_node");
+   
+   ros::NodeHandle nh_; 
+   string cloud_topic_;
+   
+   string image_topic_;
+   
+ 
+   
+   CloudSubscriber cloud_sub;
+   
+   ImageSubscriber image_sub;
+   ImageSubscriber image_sub2;
+  
+   ROS_INFO("Registering data");
+   image_sub.subscribe(nh_ ,"image1" ,1);
+   image_sub2.subscribe(nh_,"image2",1);
+    cloud_sub.subscribe(nh_,"cloud",1);
+   
+   // TimeSynchronizer<sensor_msgs::PointCloud2, sensor_msgs::Image> sync(cloud_sub, image_sub, 10);
+   //TimeSynchronizer<sensor_msgs::Image, sensor_msgs::Image> sync(image_sub, image_sub2, 1000);
+  // Synchronizer<MySyncPolicy> sync(MySyncPolicy(10), image_sub, image_sub2);
+   Synchronizer<MySyncPolicy_Aprox> sync(MySyncPolicy_Aprox(100000), image_sub, image_sub2,cloud_sub);
+   
+   sync.registerCallback(boost::bind(&Callback_imgs,_1,_2,_3));
+   
+   
+   ros::spin();
+   
+   
+   return 0;
+   
+ }
+ 

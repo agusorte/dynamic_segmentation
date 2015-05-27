@@ -1,0 +1,271 @@
+
+#include "Utilities.h"
+
+
+
+
+int Get3d_2dPoints(PointCloud<PointXYZ>::ConstPtr  cloud_p, 
+	            PointCloud<PointXYZ>::ConstPtr  cloud_p2, 
+		    MatrixXf &x3d, 
+		    MatrixXf &x2d,   
+		   vector <Point3f>& points3d,
+		    vector <Point2f>& imagePoints){
+
+ x3d= MatrixXf::Ones(cloud_p->points.size (),4);
+  x2d= MatrixXf::Ones(cloud_p2->points.size (),3);
+  std::cout<<"points selected \n"<<cloud_p->points.size ()<<std::endl;
+  
+  
+  if (cloud_p->points.size ()!=cloud_p2->points.size ()){
+   
+    
+    return (-1);
+  }
+  
+  int i,j;  
+  
+   
+  for (i=0;i<cloud_p->points.size ();i++){
+    
+    x3d(i,0)=cloud_p->points[i].x;
+    x3d(i,1)=cloud_p->points[i].y;
+    x3d(i,2)=cloud_p->points[i].z;
+    x3d(i,3)=1;   
+    
+    points3d.push_back(Point3f(x3d(i,0), x3d(i,1), x3d(i,2)));
+    
+    
+  }
+  
+  for (i=0;i<cloud_p2->points.size ();i++){
+    
+    x2d(i,0)=cloud_p2->points[i].x;
+    x2d(i,1)=cloud_p2->points[i].y;
+    x2d(i,2)=cloud_p2->points[i].z;
+    
+     imagePoints.push_back(Point2f(x2d(i,0), x2d(i,1)));
+  }
+  
+  return (0);
+  
+  
+}
+
+
+
+
+
+void SortPoints(MatrixXf &x2d)
+{
+  // the array is formed by [x1 y1 1,
+//                             x2 y2  ]
+  
+  
+  MatrixXf x2d_aux=MatrixXf::Zero(x2d.rows(),3);
+
+  //////////////////////////////////////////////////////////////
+  //first sort point in y
+  ///////////////////////////////////////////////////////////////
+  
+  int i,j;
+  for (i =0; i<x2d.rows();i++){
+    for(j = i+1; j < x2d.rows(); j ++) {
+        if(x2d(j,1) < x2d(i,1)) {
+               float temp_x = x2d(i,0);
+	       float temp_y = x2d(i,1);
+               x2d(0,i) = x2d(0,j);
+	       x2d(1,i) = x2d(1,j);
+	       
+	       x2d(0,j) = temp_x;
+	       x2d(1,j) = temp_y;
+               
+               
+	}
+    
+    }
+  }
+ 
+ /////////////////////////////////////////
+  //now order in X
+ 
+  for (i =0; i<x2d.rows();i++){
+    for(j = i+1; j < x2d.rows(); j ++) {
+        if(x2d(j,0) < x2d(i,0)) {
+               float temp_x = x2d(i,0);
+	       float temp_y = x2d(i,1);
+               x2d(0,i) = x2d(0,j);
+	       x2d(1,i) = x2d(1,j);
+	       
+	       x2d(0,j) = temp_x;
+	       x2d(1,j) = temp_y;
+               
+               
+	}
+    
+    }
+  }
+  
+  
+}
+
+void SortPointsAngle(MatrixXf &x2d){
+  
+    // the array is formed by [x1 y1 1,
+//                             x2 y2  ]
+  
+     // compute center point
+     Vector3f point=x2d.colwise().sum();
+     
+     point=point/x2d.rows();
+     
+     vector<float> angles;
+     int i,j;
+     // compute angles
+     for (i=0; i<x2d.rows();i++){
+       
+       double x=(point(0)-x2d(i,0));
+       double y=(point(1)-x2d(i,1));
+       
+       angles.push_back(atan2(y,x)*180 / (3.1416));//degree in radians
+       
+     }
+     
+     //////////////////////////////////////////////////////
+     // now order by angle chossing the minor to mayor
+     
+       for (i =0; i<x2d.rows();i++){
+          for(j = i+1; j < x2d.rows(); j ++) {
+                if(angles[j] < angles[i]) {
+		  
+                     float temp_x = x2d(i,0);
+	             float temp_y = x2d(i,1);
+                      x2d(i,0) = x2d(j,0);
+	              x2d(i,1) = x2d(j,1);
+	       
+	              x2d(j,0) = temp_x;
+	              x2d(j,1) = temp_y;
+               
+               
+	           }
+    
+           }
+       }
+     
+}
+
+void SaveCalibrationData(MatrixXf r,Vector3f  t_2){
+  
+  int i;
+  //Mat cameraMatrix = (Mat_<double>(3,3) << 1000, 0, 320, 0, 1000, 240, 0, 0, 1);
+  
+  Mat R= (Mat_<double>(3,3) << r(0,0),r(0,1),r(0,2), r(1,0),r(1,1),r(1,2),r(2,0),r(2,1),r(2,2));
+  
+  Mat t= (Mat_<double>(1,3) << t_2(0),t_2(1),t_2(2));
+  
+  FileStorage fs("test.yml", FileStorage::WRITE);
+  
+  
+  fs << "Rotation" << R << "Translation" << t;
+  
+  fs.release();
+  
+  cout<<" data saved "<<endl;
+  
+  
+}
+
+
+void OpenYalm(const string Name, Matrix3f &K){
+  
+  FileStorage fs;
+  
+      
+      
+  fs.open(Name, FileStorage::READ);
+  
+  
+ 
+  
+  Mat K2=Mat_<double > (3, 3);
+  
+  
+  if (!fs.isOpened()){
+            cerr << "Failed to open " << Name << endl;
+            
+            return ;
+   }
+        
+  fs["camera_matrix"] >> K2; 
+  
+   cout<<"files**************** "<<Name.c_str()<<endl;
+  
+    double* _r = K2.ptr<double>();
+  
+  K(0,0)=_r[0];
+  K(0,1)=_r[1];
+  K(0,2)=_r[2];
+  K(1,0)=_r[3];
+  K(1,1)=_r[4];
+  K(1,2)=_r[5];
+  K(2,0)=_r[6];
+  K(2,1)=_r[7];
+  K(2,2)=_r[8];
+  
+  fs.release();     
+}
+
+
+void OpenYalm(const string Name, Matrix3f &K,MatrixXf &P){
+
+  
+      
+  K=Matrix3f::Zero();
+   P=MatrixXf::Zero(3,4);
+  FileStorage fs(Name, FileStorage::READ);
+  Mat cameraMatrix;
+   
+  Mat projection_matrix;
+  
+//   Mat K2=Mat_<float > (3, 3);
+//   Mat K3=Mat_<float > (3, 4);
+  
+  
+//   if (!fs.isOpened()){
+//             cerr << "Failed to open " << Name << endl;
+//             
+//             return ;
+//    }
+    
+   fs["camera_matrix"] >> cameraMatrix; 
+   fs["projection_matrix"] >>projection_matrix; 
+  
+  cout<<"file**************** "<<Name.c_str()<<endl;
+  
+//     double* _r = K2.ptr<double>();
+//     double* _r2 = K3.ptr<double>();
+//     cout<<"enter here"<<endl; 
+//   K(0,0)=_r[0];
+//   K(0,1)=_r[1];
+//   K(0,2)=_r[2];
+//   K(1,0)=_r[3];
+//   K(1,1)=_r[4];
+//   K(1,2)=_r[5];
+//   K(2,0)=_r[6];
+//   K(2,1)=_r[7];
+//   K(2,2)=_r[8];
+//    cout<<"enter here"<<endl;
+//   P(0,0)=_r2[0];
+//   P(0,1)=_r2[1];
+//   P(0,2)=_r2[2];
+//   P(0,3)=_r2[3];
+//   P(1,0)=_r2[4];
+//   P(1,1)=_r2[5];
+//   P(1,2)=_r2[6];
+//   P(1,3)=_r2[7];
+//   P(2,0)=_r2[8];
+//   P(2,1)=_r2[9];
+//   P(2,2)=_r2[10];
+//   P(2,3)=_r2[11];
+  
+  fs.release();     
+}

@@ -1,0 +1,20 @@
+<package>
+  <description brief="planar_range_image">
+
+     planar_range_image
+
+  </description>
+  <author>Agustin Ortega</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/planar_range_image</url>
+  <depend package="pcl"/>
+  <depend package="pcl_ros"/>
+  <depend package="roscpp"/>
+  <depend package="std_msgs"/>
+  <depend package="rosboost_cfg"/>
+  <depend package="cv_bridge"/>
+
+</package>
+
+

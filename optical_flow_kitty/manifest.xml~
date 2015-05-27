@@ -1,0 +1,19 @@
+<package>
+  <description brief="optical_flow_kitty">
+
+     optical_flow_kitty
+
+  </description>
+  <author>Agustin Ortega</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/optical_flow_kitty</url>
+  <depend package="pcl"/>
+  <depend package="pcl_ros"/>
+  <depend package="roscpp"/>
+  <depend package="std_msgs"/>
+  <depend package="opencv2"/>
+
+</package>
+
+

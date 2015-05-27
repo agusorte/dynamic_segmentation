@@ -1,0 +1,23 @@
+<package>
+  <description brief="laser_calib_manual">
+
+     laser_calib_manual
+
+  </description>
+  <author>Agustin Ortega</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/laser_calib_manual</url>
+   <depend package="rosboost_cfg"/>
+  <depend package="pcl"/>
+  <depend package="roscpp"/>
+  <depend package="sensor_msgs"/>
+  <depend package="opencv2"/>
+  <depend package="cv_bridge"/>
+  <depend package="image_transport"/>
+  <depend package="pcl_ros"/>
+  <depend package="std_msgs"/>
+
+</package>
+
+

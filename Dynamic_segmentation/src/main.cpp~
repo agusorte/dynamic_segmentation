@@ -1,0 +1,601 @@
+ #include <string>
+ #include <iostream>
+ #include <rosbag/bag.h>
+ #include <rosbag/view.h>
+ #include "ros/ros.h"
+ #include <ros/names.h>
+ 
+ #include <boost/foreach.hpp>
+ #include <boost/assign/list_of.hpp>
+ 
+ #include <sensor_msgs/Image.h>
+ #include <sensor_msgs/CameraInfo.h>
+ #include <sensor_msgs/PointCloud2.h>
+ 
+ #include <opencv/cv.h>
+ #include <opencv/highgui.h>
+ #include <cv_bridge/cv_bridge.h>
+ #include <sensor_msgs/image_encodings.h>
+ #include <pcl/segmentation/segment_differences.h>
+ #include <message_filters/sync_policies/exact_time.h>
+ 
+ #include <message_filters/sync_policies/approximate_time.h>
+ 
+ #include <message_filters/subscriber.h>
+ #include <message_filters/sync_policies/exact_time.h>
+ #include <message_filters/time_synchronizer.h> 
+ 
+ #include <pcl/ModelCoefficients.h>
+ #include <pcl/point_types.h>
+ #include <pcl/filters/extract_indices.h>
+ #include <pcl/filters/voxel_grid.h>
+ #include <pcl/features/normal_3d.h>
+ #include <pcl/kdtree/kdtree.h>
+ #include <pcl/sample_consensus/method_types.h>
+ #include <pcl/sample_consensus/model_types.h>
+ #include <pcl/segmentation/sac_segmentation.h>
+ #include <pcl/segmentation/extract_clusters.h>
+ 
+ 
+ #include <pcl/point_types.h>
+ 
+ 
+ //visualization 
+ #include <pcl/visualization/cloud_viewer.h>
+ #include <pcl/visualization/pcl_visualizer.h>
+ #include <pcl/visualization/range_image_visualizer.h>
+ #include <pcl/visualization/interactor_style.h>
+ 
+ //segmentation
+ #include <pcl/sample_consensus/method_types.h>
+ #include <pcl/sample_consensus/model_types.h>
+ #include <pcl/segmentation/sac_segmentation.h>
+ #include <pcl/segmentation/extract_clusters.h>
+ #include <pcl/kdtree/kdtree.h>  
+ 
+ #include "pcl/io/io.h"
+ #include "pcl/io/pcd_io.h"
+ #include "pcl/filters/voxel_grid.h"
+ #include "pcl/filters/passthrough.h"
+ #include "pcl/filters/extract_indices.h"
+ #include "pcl/features/normal_3d.h"
+ 
+ #include <pcl/features/normal_3d.h>
+ #include <pcl/kdtree/kdtree.h>
+ #include "pcl/kdtree/io.h"
+ #include <pcl/sample_consensus/method_types.h>
+ #include <pcl/sample_consensus/model_types.h>
+ #include <pcl/segmentation/sac_segmentation.h>
+ #include <pcl/segmentation/extract_clusters.h>
+ 
+ #include <pcl/console/parse.h>
+ // #include <terminal_tools/print.h>
+ // #include <terminal_tools/parse.h>
+ 
+ #include <pcl/filters/statistical_outlier_removal.h>
+ #include <pcl/filters/extract_indices.h>
+ #include <pcl/filters/project_inliers.h>
+ #include <pcl/pcl_base.h>
+#include "pcl/kdtree/kdtree.h"
+
+ 
+ #include "cxcore.h"
+ #include <cv.h>
+ #include <highgui.h>
+ #include <math.h>
+ #include <vector>
+ #include <ros/ros.h>
+ #include "sensor_msgs/Image.h"
+ #include "image_transport/image_transport.h"
+ #include "cv_bridge/CvBridge.h"
+ #include <opencv/cv.h>
+ #include <opencv/highgui.h>
+ 
+ #include <pcl/console/parse.h>
+ 
+ #include "Utilities.h"
+ #include "image_utilities.h"
+ ///EIGEN
+ 
+ #include <Eigen/Dense>
+ 
+ 
+
+ using namespace pcl;
+ using namespace std;
+ using namespace Eigen;
+ using namespace message_filters;
+ 
+ using namespace cv;
+ namespace enc = sensor_msgs::image_encodings;
+ 
+ typedef message_filters::Subscriber< sensor_msgs::Image > ImageSubscriber;
+ 
+ typedef message_filters::Subscriber<sensor_msgs::PointCloud2 > CloudSubscriber;
+ boost::shared_ptr<visualization::PCLVisualizer> viewer(new pcl::visualization::PCLVisualizer("3D Viewer"));
+ boost::shared_ptr<visualization::PCLVisualizer> viewer2(new pcl::visualization::PCLVisualizer("3D Viewer"));
+ 
+ boost::shared_ptr<pcl::visualization::RangeImageVisualizer> range_image_widget(new pcl::visualization::RangeImageVisualizer("Range image"));
+ pcl::visualization::PCLVisualizerInteractorStyle vis_style;
+ string file;
+ Matrix3f K_;
+ MatrixXf P_;
+ Matrix3f Trans_;
+ 
+ 
+ boost::shared_ptr<pcl::RangeImage> range_image(new pcl::RangeImage);
+ ///////////////////////////////////////////////////////////////////////
+ ///images gaussianas 
+ /////////////////////////////////////////////////////////////////////
+ BackgroundSubtractorMOG2 bg_im;
+ std::vector<std::vector<Point> > im_contours;
+ Mat im_back; // background image
+ Mat im_fore; // foreground mask
+ /////////////////////////////////////////////////
+ /// range images
+ //////////////////////////////////////////////////////
+ BackgroundSubtractorMOG2 bg_range;
+ std::vector<std::vector<Point> > contours_range;
+ Mat im_range_current;
+ Mat im_range_previous;
+ Mat im_range_current_norm;
+ Mat im_range_previous_norm;
+ Mat flow,cflow,color_flow;
+ Mat falseColorsMap;
+ Mat range_color_im;
+ Mat back_range; // background image
+ Mat fore_range; // foreground mask
+ 
+ ///////////////////////////////////////////////////////////////////
+ ///Matriz of cloud projected and cloud in image
+
+ //////////////////////////////////////////////////////////////////
+ 
+ int n_frame=0;
+ 
+ 
+ void Callback(const sensor_msgs::PointCloud2ConstPtr& cloudI,
+	       const sensor_msgs::ImageConstPtr& msg)
+ {
+   ROS_INFO("image2 timestamps %i.%i ", msg->header.stamp.sec,msg->header.stamp.nsec);
+   
+   ROS_INFO("cloud timestamps %i.%i ", cloudI->header.stamp.sec,cloudI->header.stamp.nsec);
+   
+   
+   //////////////////////////////////////////////////////////////////////////////////
+   ///initialize objects visualization 
+   //////////////////////////////////////////////////////////////////////////////////
+   
+   viewer->setBackgroundColor (0, 0, 0);
+ //  viewer->addCoordinateSystem (1.0);
+   viewer->initCameraParameters ();
+   viewer->setCameraPose (-5,-5,1,1,0,0,0,0,1);
+   
+   viewer2->setBackgroundColor (0, 0, 0);
+   viewer2->addCoordinateSystem (1.0);
+   viewer2->initCameraParameters ();
+   viewer2->setCameraPose (-5,-5,1,1,0,0,0,0,1);
+// //    
+   //////////////////////////////////////////////////////////////////
+   ///for range images
+   /////////////////////////////////////////////////////////////////
+   
+   Eigen::Affine3f sensorPose = (Eigen::Affine3f)Eigen::Translation3f(0.0f, 0.0f, 0.0f);
+   
+   pcl::RangeImage::CoordinateFrame coordinate_frame = pcl::RangeImage::LASER_FRAME;
+   
+   float noiseLevel=0.00;
+   
+   float minRange = 0.0f;
+   
+   int borderSize = 1;
+   
+   
+   /////////////////////////////////////////////////////////////////////
+   /// point cloud 
+   ///////////////////////////////////////////////////////////////////
+   PointCloud<PointXYZ>::Ptr cloud_ptr (new PointCloud<PointXYZ>);
+   
+   
+   if ((cloudI->width * cloudI->height) == 0)
+     return ;
+   
+   ROS_INFO ("Received %d data points in frame %s with the following fields: %s",
+	     
+	     (int)cloudI->width * cloudI->height,
+	     
+	     cloudI->header.frame_id.c_str (),
+	     
+	     pcl::getFieldsList (*cloudI).c_str ());
+   
+   
+   
+   
+   pcl::fromROSMsg(*cloudI, *cloud_ptr);
+   
+   
+   
+   ////////////////////////////////////////////////////////////////
+   ///image
+   ////////////////////////////////////////////////////////////////
+   cv_bridge::CvImageConstPtr cv_ptr;
+   
+   try
+   
+   {
+     
+     if (enc::isColor(msg->encoding))
+       
+       cv_ptr = cv_bridge::toCvShare(msg, enc::BGR8);
+     
+     else
+       
+       cv_ptr = cv_bridge::toCvShare(msg, enc::MONO8);
+     
+     ROS_INFO("Image data size (%d, %d)",cv_ptr->image.rows, cv_ptr->image.cols);
+     
+   }
+   
+   catch (cv_bridge::Exception& e)
+   
+   {
+     
+     ROS_ERROR("cv_bridge exception: %s", e.what());
+     
+     
+     return ;
+     
+   }
+   
+   MatrixXf projected_cloud;
+   MatrixXf cloud_on_image;
+   MatrixXf projected_cloud_non_floor;
+   MatrixXf cloud_on_image_non_floor;
+   MatrixXf cloud_in_imagecontour;
+   //////////////////////////////////////////////////////////
+   ///imagen opencv
+   ///////////////////////////////////////////////////////////
+   Mat im_current,im_current_color,im_current_gm,im_current_color_region;
+   im_current=cv_ptr->image.clone();
+   // im_current_color=Mat(im_current.rows, im_current.cols,CV_32FC2);
+   im_current.copyTo( im_current_color);
+   cvtColor(im_current, im_current_color, CV_GRAY2RGB);
+   im_current_color.copyTo(im_current_gm);
+   im_current_color.copyTo(im_current_color_region);
+   
+   //////////////////////////////////////////////////////////////////////
+   ///Process cloud
+   ////////////////////////////////////////////////////////////////////
+   PointCloud<PointXYZ>::Ptr cloud_filtered(new PointCloud<PointXYZ>);
+   PointCloud<PointXYZRGB>::Ptr cloud_RGB(new PointCloud<PointXYZRGB>);
+   /////////////////////////////////////////////////////////////
+   //find planes and non planes
+   
+   pcl::PointCloud<PointXYZ>::Ptr cloud_nonPlanes (new PointCloud<PointXYZ> ());
+   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_Plane(new PointCloud<PointXYZ> ());
+   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_projected (new PointCloud<pcl::PointXYZ>);
+   
+   ///segment data 
+   SegmentData(cloud_ptr,cloud_filtered,cloud_nonPlanes,cloud_Plane,cloud_projected);
+   
+   
+   ////////////////////////////////////////////////////////
+   ///here change the cloud filtered
+   //Eigen::MatrixXf cloud_1=cloud_filtered->getMatrixXfMap();
+   Eigen::MatrixXf cloud_1= cloud_filtered->getMatrixXfMap();
+   Eigen::MatrixXf cloud_2= cloud_nonPlanes->getMatrixXfMap();//non planes
+   ////////////////////////////////////////////
+   ///project points
+   project_cloud2image( cloud_1,cloud_2,im_current_color,Trans_,P_,projected_cloud, 
+			cloud_on_image,projected_cloud_non_floor, cloud_on_image_non_floor,cloud_RGB);
+   
+    
+   ///////////////////////////////////////////////////
+   ///images gaussians
+   Gaussian_images(bg_im, im_current_gm, im_fore, im_back,
+		   im_contours,Scalar(255,0,0)); 
+   
+   
+ 
+   
+   //////*/////////////////////////////////////////////////////////////////////////////////////////////////
+   /// Point cloud visualization
+   //////////////////////////////////////////////////////////////////////////////////////////////////////
+   
+   visualization::PointCloudColorHandlerCustom <PointXYZ> point_cloud_color_handler (cloud_ptr, 150, 150, 150);   
+   viewer->addPointCloud<PointXYZ> (cloud_ptr, point_cloud_color_handler, "original point cloud"); 
+   
+   //here is for creating image range 
+   range_image->createFromPointCloud (*cloud_filtered, pcl::deg2rad(0.3f),
+				      pcl::deg2rad (360.f), pcl::deg2rad (180.0f),  
+				      sensorPose, coordinate_frame, noiseLevel, minRange, borderSize);
+   /// debugging and for paper complete range images
+     range_image->createFromPointCloud (*cloud_ptr, pcl::deg2rad(0.6f),
+				      pcl::deg2rad (360.f), pcl::deg2rad (180.0f),  
+				      sensorPose, coordinate_frame, noiseLevel, minRange, borderSize);
+   
+   // range_image_widget->showRangeImage(*range_image);
+   ////////////////////////////////////////////////////////////////////////////////////
+   /// range images projected 
+   
+   GenerarImagenOpenCV(range_image,im_range_current, im_range_current_norm);//normalized is th size of the lastimage
+   applyColorMap( im_range_current_norm, falseColorsMap, COLORMAP_HOT);
+   
+   falseColorsMap.copyTo(range_color_im);
+   
+   Gaussian_images(bg_range, falseColorsMap, fore_range, back_range,
+		   contours_range,Scalar(255,0,0)); 
+   
+   
+   pcl::PointCloud<PointXYZ>::Ptr cloud_seg (new PointCloud<PointXYZ> ());
+   
+   //     pcl::PointCloud<PointXYZ>::Ptr cloud (new PointCloud<PointXYZ> ());
+   Region2Cloud( contours_range,
+		 range_image, 
+		 cloud_seg);
+   
+   pcl::PointCloud<PointXYZ>::Ptr cloud_in_contour (new PointCloud<PointXYZ> ());
+   ///now in image 
+//    Region2image_point_proj(im_contours,
+// 			   projected_cloud_non_floor, cloud_on_image_non_floor,
+// 			   cloud_in_contour,
+// 			   im_current_color_region);
+   
+    Region2image_point_proj(im_contours,
+			   projected_cloud_non_floor, cloud_on_image_non_floor,
+			   cloud_in_contour,
+			   im_current_gm);
+   /////////////////////////////////////////
+   /// region fused
+   ///////////////////////////////////////
+    pcl::PointCloud<PointXYZ>::Ptr cloud_fused(new PointCloud<PointXYZ> ());
+   Regionfused(cloud_seg,cloud_in_contour,cloud_fused);
+   
+  ////////////////////////////////////
+   ///concate point clouds
+   ////////////////////////
+  /* pcl::PointCloud<PointXYZ>::Ptr cloud_union (new PointCloud<PointXYZ> ());
+    
+   // pcl::concatenateFields (*cloud_union,*cloud_seg,*cloud_in_contour);
+   viewer2->addPointCloud<PointXYZ> (cloud_seg,  "cloud1",0); 
+   viewer2->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 0.4, 0.5,"cloud1");
+      viewer2->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE,4, "cloud1");
+    viewer2->addPointCloud<PointXYZ> (cloud_in_contour,  "cloud2",0); 
+    viewer2->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 0.4, 0.5,"cloud2");
+     viewer2->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE,4, "cloud2");
+  
+   viewer2->addPointCloud<PointXYZ> (cloud_ptr, point_cloud_color_handler, "original point cloud"); */
+ ////////////////////////////////////////
+   ///cloud diference
+   pcl::PointCloud<PointXYZ>::Ptr cloud_diff (new PointCloud<PointXYZ> ());
+   
+    pcl::search::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZ>);
+     pcl::SegmentDifferences<pcl::PointXYZ> sdiff; 
+   sdiff.setSearchMethod (tree);
+   sdiff.setTargetCloud (cloud_seg);
+   sdiff.setInputCloud (cloud_in_contour);
+   sdiff.setDistanceThreshold (0.005);
+   
+   sdiff.segment (*cloud_diff);
+   
+   
+   
+   ///range data segmentates
+   visualization::PointCloudColorHandlerCustom <PointXYZ> point_cloud_color_handler2 (cloud_ptr, 0, 150, 0);   
+   
+   //cloud in range images
+   viewer->addPointCloud<PointXYZ> (cloud_seg, "regions",0); 
+   viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 0.0, 0.0, 1.0,"regions");
+   viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE,4, "regions");
+   
+   /// cloud in image point registered
+   viewer->addPointCloud<PointXYZ> (cloud_in_contour, "regions image",0); 
+   viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 0.0, 1.0, 0.0,"regions image");
+   viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE,4, "regions image");
+   
+   ///cloud fused 
+//    viewer->addPointCloud<PointXYZ> (cloud_diff, "cloud diff",0); 
+//    viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 0.0, 0.0,"cloud diff");
+//    viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE,4, "cloud diff");
+//    
+   //plane extrated
+   viewer->addPointCloud<PointXYZ> (cloud_Plane, "Plane",0); 
+   viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 0.6, 0.0,"Plane");
+  
+    pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> rgb(cloud_RGB);
+ //  viewer->addPointCloud<PointXYZRGB> (cloud_rgb,rgb,"cloud rgb"); 
+   
+  viewer2->addPointCloud<PointXYZRGB> (cloud_RGB, rgb,"RGB cloud",0); 
+   viewer2->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "RGB cloud");
+   
+   
+   PointXYZ  min_pt,max_pt;
+   pcl::ModelCoefficients coeff_cube; 
+    pcl::getMinMax3D (*cloud_seg, min_pt, max_pt); 
+   coeff_cube.values.resize(10);
+   coeff_cube.values[0] = min_pt.x+(max_pt.x-min_pt.x)/2; // Translation along the X axis
+   coeff_cube.values[1] = min_pt.y+(max_pt.y-min_pt.y)/2; // Translation along the Y axis
+   coeff_cube.values[2] = min_pt.z+(max_pt.z-min_pt.z)/2; // Translation along the Z axis
+   coeff_cube.values[3] = 0;
+   coeff_cube.values[4] = 0;
+   coeff_cube.values[5] = 0;
+   coeff_cube.values[6] = 1;
+   coeff_cube.values[7] = fabs(max_pt.x-min_pt.x);
+   coeff_cube.values[8] = fabs(max_pt.y-min_pt.y);
+   coeff_cube.values[9] = fabs(max_pt.z-min_pt.z); 
+//    // \brief Add a cube from a set of given model coefficients
+//           * \param[in] coefficients the model coefficients (Tx, Ty, Tz, Qx, Qy, Qz, Qw, width, height, depth)
+//           * \param[in] id the cube id/name (default: "cube")
+//           * \param[in] viewport (optional) the id of the new viewport (default: 0)
+//           */
+  
+   viewer2->addCube (coeff_cube,"cube"); 
+  viewer2->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 0.0, 0.0,"cube");
+   ///////////////////////////////////////////////////////////////////
+   /// image visualization
+   /////////////////////////////////////////////////////////////////
+   
+   imshow( "Image",im_current_color);
+   imshow("Gaussian ",im_current_gm);
+   imshow("Regions  ",im_current_color_region);
+   
+   imshow("Gaussian range ",falseColorsMap);
+   imshow("Gaussian Color ",range_color_im);
+   
+   saveimages(im_current_color,im_current_gm,
+		im_current_color_region,falseColorsMap, range_color_im,
+	      viewer, n_frame);
+
+   /*viewer->spinOnce();
+   viewer2->spinOnce()*/;
+   
+//    while (!viewer->wasStopped ())
+//   {
+    viewer->spinOnce ();
+    viewer2->spinOnce ();
+   // boost::this_thread::sleep (boost::posix_time::microseconds (100000));
+//   }
+//   
+//    viewer2->spinOnce();
+   pcl_sleep(2.0);
+   
+   
+   waitKey(30);
+   
+   
+   
+   viewer->removePointCloud("original point cloud");
+   viewer->removePointCloud("regions");
+   viewer->removePointCloud("regions image");
+   viewer->removePointCloud("Plane");
+   viewer->removePointCloud("cloud diff");
+   viewer->removePointCloud("cube");
+ /*  
+   viewer2->removePointCloud("original point cloud");
+   viewer2->removePointCloud("cloud1");
+   viewer2->removePointCloud("cloud2");*/
+   viewer2->removePointCloud("RGB cloud");
+   viewer2->removeShape("cube");
+   
+   n_frame=n_frame+1;
+ }
+ void help(){
+   
+   
+   
+   ROS_ERROR("Error please try : \n\n"   );
+   
+   ROS_ERROR("rosrun project_points project_points  --file /home/aortega/Experiments/velodyne_32E/camera-calibration/calib1.yml clouds:=/velodyne_points images:=/camera/image_raw\n"   );
+   
+ }
+ int Read_arguments(int argc, char **argv,
+		    
+		    string & file_calib)
+ {
+   if(pcl::console::find_argument (argc, argv, "--file") >= 1){
+     
+     
+     
+     console::parse_argument (argc, argv, "--file", file_calib);
+     
+     
+     
+     // ROS_INFO("File %s\n\n",file_calib.c_str());
+     
+   }else
+     
+   {
+     
+     ROS_INFO("File %s\n\n",file_calib.c_str());
+     
+     help();
+     
+     return(-1);
+     
+     
+     
+   }
+ }
+ 
+ void read_calib()
+ {
+   
+   
+   K_=Matrix3f::Zero();
+   
+   P_=MatrixXf::Zero(3,4);
+   
+   
+   K_<<937.146667, 0, 519.104641, 0, 935.420696, 370.967077, 0, 0, 1;
+   
+   
+   P_<<15.9817, -442.3067, -975.6141, -334.0317, 
+   -936.3524,  205.6084, -305.9377,  454.5841, 
+   -0.0030, 0.5965,-0.8026, 0.7670;
+   
+   Trans_<<0 ,0 ,-1,
+   0, 1 ,0,
+   1, 0 ,0;
+ }
+ 
+ int main (int argc, char** argv){
+   
+   
+   typedef sync_policies::ExactTime<sensor_msgs::PointCloud2, sensor_msgs::Image> MySyncPolicy;
+   typedef sync_policies::ApproximateTime<sensor_msgs::PointCloud2, sensor_msgs::Image> MySyncPolicy_Aprox;
+   if(Read_arguments(argc, argv,file)==-1)
+   {
+     
+     
+     
+     return (-1);
+     
+   }
+   
+   else
+   {
+     //////////////////////////////////////////////////
+     /// read calibration
+     //////////////////////////////////////////////////
+     read_calib();
+     cout<<K_<<endl;
+     cout<<P_<<endl;
+     
+     ros::init(argc, argv, "Syncronization_node");
+     
+     ros::NodeHandle nh_; 
+     string cloud_topic_;
+     
+     string image_topic_;
+     
+     
+     
+     CloudSubscriber cloud_sub;
+     
+     ImageSubscriber image_sub;
+     
+     
+     ROS_INFO("Registering data");
+     
+     
+     cloud_sub.subscribe(nh_,"clouds",1);
+     image_sub.subscribe(nh_ ,"images" ,1);
+     
+     
+     ROS_INFO("try rosrun velodyne_process_sync_topics velodyne_process_sync_topics clouds:=/velodyne_points images:=/camera/image_raw");
+     //TimeSynchronizer<sensor_msgs::PointCloud2, sensor_msgs::Image> sync(cloud_sub, image_sub, 10);
+     //TimeSynchronizer<sensor_msgs::Image, sensor_msgs::Image> sync(image_sub, image_sub2, 1000);
+     // Synchronizer<MySyncPolicy> sync(MySyncPolicy(10), image_sub, image_sub2);
+     Synchronizer<MySyncPolicy_Aprox> sync(MySyncPolicy_Aprox(10), cloud_sub, image_sub);
+     
+     sync.registerCallback(boost::bind(&Callback,_1,_2));
+     
+     
+     ros::spin();
+     
+   }
+   return 0;
+   
+ }
+ 
+ 

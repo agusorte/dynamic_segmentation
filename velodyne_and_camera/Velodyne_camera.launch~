@@ -1,0 +1,37 @@
+<launch> 
+
+  <!-- start driver we test with the velodyne 32 but can be used also for the velodyne 64 --> 
+<!-- Agustin Ortega April 2013 --> 
+
+  <!-- start driver --> 
+  <node pkg="velodyne_driver" type="velodyne_node" name="velodyne_node"> 
+    <param name="_model" value="32E"/> 
+    </node>
+
+<!-- start cloud node with test calibration file --> 
+  <node pkg="velodyne_pointcloud" type="cloud_node" name="cloud_node"> 
+    <param name="_calibration" 
+           value="/opt/ros/fuerte/stacks/velodyne/velodyne_pointcloud/params/32db.yaml "/> 
+  </node>
+
+
+
+<!-- camera 1394 -->
+<node pkg="camera1394" type="camera1394_node" name="camera1394_node" >
+      <param name="guid" value="00b09d01006c2fa3" />
+      <param name="video_mode" value="1024x768_mono8" />
+      <param name="iso_speed" value="400" />
+      <param name="frame_rate" value="30" />
+    </node>
+
+<!-- rviz -->
+<node pkg="rviz" type="rviz" name="rviz" args="-f velodyne"/>
+
+<!-- image viewer -->
+ <node pkg="image_view" type="image_view" name="image_view" >
+      <remap from="image" to="camera/image_raw" />
+    </node>
+<!-- rbag record-->
+<!-- <node pkg="rosbag"  type="record" name="record" output="screen" args="-a"/> -->
+
+</launch>

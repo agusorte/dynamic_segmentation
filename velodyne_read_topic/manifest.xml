@@ -1,0 +1,22 @@
+<package>
+  <description brief="velodyne_read_topic">
+
+     velodyne_read_topic
+
+  </description>
+  <author>Agustin Ortega</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/velodyne_read_topic</url>
+  <depend package="opencv2"/>
+  <depend package="roscpp"/>
+  <depend package="sensor_msgs"/>
+  <depend package="cv_bridge"/>
+  <depend package="image_transport"/>
+  <depend package="pcl_ros"/>
+  <depend package="std_msgs"/>
+  <depend package="rosboost_cfg"/>
+
+</package>
+
+
